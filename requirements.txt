@@ -1,0 +1,32 @@
+# --- Core RAG stack ---
+chromadb==0.5.23
+sentence-transformers==3.3.1
+langchain==0.3.13
+langchain-community==0.3.13
+langchain-groq==0.2.1
+
+# --- LLM inference (free tier) ---
+groq==0.13.1
+
+# --- Serving ---
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+
+# --- Experiment tracking ---
+mlflow==2.19.0
+
+# --- Monitoring ---
+prometheus-client==0.21.1
+
+# --- Utilities ---
+python-dotenv==1.0.1
+pyyaml==6.0.2
+tqdm==4.67.1
+
+# --- Testing ---
+pytest==8.3.4
+httpx==0.28.1
+
+# --- Evaluation ---
+ragas==0.2.10

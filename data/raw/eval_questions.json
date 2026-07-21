@@ -1,0 +1,14 @@
+[
+  {
+    "question": "What is this project about?",
+    "ground_truth": "This project is an LLMOps platform demonstrating production-grade RAG with experiment tracking, CI/CD, and observability, built on free and open-source tools."
+  },
+  {
+    "question": "What vector database does this project use?",
+    "ground_truth": "The project uses ChromaDB as its vector database."
+  },
+  {
+    "question": "Which experiment tracking tool is used?",
+    "ground_truth": "MLflow is used for experiment tracking, logging parameters, metrics, and runs."
+  }
+]

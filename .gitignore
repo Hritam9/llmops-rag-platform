@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+venv/
+.env
+data/processed/chroma_store/
+mlruns/
+mlflow.db
+*.log
+.pytest_cache/
+.DS_Store

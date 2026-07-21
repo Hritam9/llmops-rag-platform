@@ -1,0 +1,52 @@
+# Central configuration for the RAG + LLMOps pipeline.
+# Every field here is logged as an MLflow param on each run —
+# this is what makes experiments comparable and reproducible.
+
+embedding:
+  model_name: "sentence-transformers/all-MiniLM-L6-v2"  # free, local, 384-dim
+  device: "cpu"
+
+chunking:
+  chunk_size: 500
+  chunk_overlap: 50
+  strategy: "recursive"   # recursive | fixed
+
+vector_store:
+  provider: "chroma"
+  collection_name: "llmops_rag_docs"
+  persist_dir: "./data/processed/chroma_store"
+
+retrieval:
+  top_k: 4
+  score_threshold: 0.3
+
+generation:
+  provider: "groq"                 # groq | ollama
+  model_name: "llama-3.1-8b-instant"   # free-tier Groq model
+  ollama_model_name: "llama3.2"    # used if provider == ollama
+  temperature: 0.2
+  max_tokens: 512
+  system_prompt: >
+    You are a precise assistant that answers ONLY using the provided context.
+    If the answer is not in the context, say "I don't have enough information
+    to answer that." Never fabricate facts.
+
+evaluation:
+  metrics: ["faithfulness", "answer_relevancy", "context_precision"]
+  test_set_path: "data/raw/eval_questions.json"
+  regression_threshold: 0.7   # CI fails if avg score drops below this
+  # ragas' judge LLM needs strict structured-output following (e.g. for
+  # answer_relevancy's reverse-question generation). Small/fast models like
+  # llama-3.1-8b-instant are unreliable at this and silently return NaN.
+  # Use a larger, more instruction-reliable free-tier Groq model for grading.
+  judge_model_name: "llama-3.3-70b-versatile"
+
+mlflow:
+  experiment_name: "llmops-rag-platform"
+  # Local file store by default — works with zero setup in CI and on a laptop.
+  # When running via docker/docker-compose.yml, this is overridden by the
+  # MLFLOW_TRACKING_URI env var pointing at the mlflow service (http://mlflow:5000).
+  tracking_uri: "file:./mlruns"
+
+monitoring:
+  prometheus_port: 8001
