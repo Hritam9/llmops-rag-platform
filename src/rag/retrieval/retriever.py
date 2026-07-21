@@ -17,7 +17,8 @@ class Retriever:
         )
         self.client = chromadb.PersistentClient(path=config["vector_store"]["persist_dir"])
         self.collection = self.client.get_or_create_collection(
-            name=config["vector_store"]["collection_name"]
+            name=config["vector_store"]["collection_name"],
+            metadata={"hnsw:space": "cosine"},
         )
 
     def retrieve(self, query: str, top_k: int | None = None) -> List[Dict]:
@@ -37,7 +38,11 @@ class Retriever:
         dists = results.get("distances", [[]])[0]
 
         for doc, meta, dist in zip(docs, metas, dists):
-            # Chroma returns cosine distance; convert to similarity score (0-1, higher = better)
+            # Collection is created with hnsw:space="cosine", so Chroma's
+            # "distance" here is true cosine distance (0-2, lower = closer).
+            # similarity = 1 - distance is only valid under that metric —
+            # Chroma's default (squared L2) would make this conversion wrong
+            # and silently over-filter correct matches.
             similarity = 1 - dist
             if similarity >= threshold:
                 hits.append({"text": doc, "metadata": meta, "score": round(similarity, 4)})
