@@ -58,7 +58,8 @@ def run_ingestion(source_dir: str, config: dict) -> None:
         # 4. Upsert into Chroma
         client = chromadb.PersistentClient(path=config["vector_store"]["persist_dir"])
         collection = client.get_or_create_collection(
-            name=config["vector_store"]["collection_name"]
+            name=config["vector_store"]["collection_name"],
+            metadata={"hnsw:space": "cosine"},
         )
         collection.upsert(
             ids=ids,
