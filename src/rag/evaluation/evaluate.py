@@ -33,6 +33,26 @@ METRIC_MAP = {
     "context_precision": context_precision,
 }
 
+# ragas changed its dataset column schema between versions:
+#   old (<=0.1.x): question / answer / contexts / ground_truth
+#   new (>=0.2.x): user_input / response / retrieved_contexts / reference
+# We build the dataset with the new (current) schema below, but keep this
+# resolver so reporting code never hard-codes one naming scheme and can't
+# be broken again by a future ragas version renaming columns.
+QUESTION_KEYS = ("user_input", "question")
+ANSWER_KEYS = ("response", "answer")
+
+
+def _col(row_or_df, keys, default=""):
+    """Return the first present column/key from `keys`, or `default`."""
+    for k in keys:
+        try:
+            if k in row_or_df:
+                return row_or_df[k]
+        except TypeError:
+            continue
+    return default
+
 
 def _build_ragas_judge(config: dict):
     """Ragas needs its own LLM + embeddings to grade answers — this is
@@ -82,8 +102,8 @@ def _print_per_question_report(scores_df, metric_names: list[str]) -> None:
     print("=" * 100)
     for i, row in scores_df.iterrows():
         print(f"\n--- Question {i + 1}/{len(scores_df)} ---")
-        print(f"  Q: {row['question']}")
-        print(f"  A: {row['answer']}")
+        print(f"  Q: {_col(row, QUESTION_KEYS)}")
+        print(f"  A: {_col(row, ANSWER_KEYS)}")
         for m in metric_names:
             if m in row:
                 print(f"  {m}: {_fmt_score(row[m])}")
@@ -119,8 +139,8 @@ def _write_github_step_summary(
     lines.append(header)
     lines.append(sep)
     for i, row in scores_df.iterrows():
-        q = str(row["question"]).replace("|", "\\|").replace("\n", " ")
-        a = str(row["answer"]).replace("|", "\\|").replace("\n", " ")
+        q = str(_col(row, QUESTION_KEYS)).replace("|", "\\|").replace("\n", " ")
+        a = str(_col(row, ANSWER_KEYS)).replace("|", "\\|").replace("\n", " ")
         if len(a) > 200:
             a = a[:200] + "…"
         score_cells = " | ".join(_fmt_score(row.get(m)) for m in metric_names)
@@ -150,11 +170,12 @@ def run_evaluation(config: dict):
         print(f"[evaluation] ({idx + 1}/{len(eval_set)}) Q: {item['question']}")
         print(f"[evaluation]        A: {result['answer']}\n")
 
+    # ragas >=0.2 expects this schema: user_input / response / retrieved_contexts / reference
     dataset = Dataset.from_dict({
-        "question": questions,
-        "answer": answers,
-        "contexts": contexts,
-        "ground_truth": ground_truths,
+        "user_input": questions,
+        "response": answers,
+        "retrieved_contexts": contexts,
+        "reference": ground_truths,
     })
 
     metric_names = config["evaluation"]["metrics"]
