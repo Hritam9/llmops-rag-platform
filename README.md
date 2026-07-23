@@ -100,12 +100,6 @@ llmops-rag-platform/
 └── scripts/                 # helper shell scripts
 ```
 
-## Resume bullet (example)
-
-> Built an end-to-end LLMOps platform (RAG + MLflow + CI/CD eval gating + Prometheus/
-> Grafana observability) using entirely open-source tooling; automated retrieval/
-> generation quality checks blocked regressions pre-merge via GitHub Actions.
-
 ## Roadmap / stretch goals
 - Swap Chroma for a hosted free-tier vector DB (e.g., Qdrant Cloud free tier) to show multi-backend support
 - Add a re-ranker (e.g., `bge-reranker` via HuggingFace) as an ablation in MLflow
