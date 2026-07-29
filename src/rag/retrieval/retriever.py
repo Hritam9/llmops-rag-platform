@@ -1,5 +1,4 @@
 """Vector similarity retriever backed by ChromaDB."""
-from typing import Dict, List
 
 import chromadb
 
@@ -21,7 +20,7 @@ class Retriever:
             metadata={"hnsw:space": "cosine"},
         )
 
-    def retrieve(self, query: str, top_k: int | None = None) -> List[Dict]:
+    def retrieve(self, query: str, top_k: int | None = None) -> list[dict]:
         """Return the top-k most similar chunks for a query, with scores."""
         k = top_k or self.config["retrieval"]["top_k"]
         query_vector = self.embedder.embed_query(query)
