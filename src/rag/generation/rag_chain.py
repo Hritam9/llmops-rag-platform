@@ -1,7 +1,6 @@
 """Orchestrates a single RAG query: retrieve -> build prompt -> generate -> log to MLflow."""
 import os
 import time
-from typing import Dict
 
 import mlflow
 
@@ -16,7 +15,7 @@ class RAGChain:
         self.retriever = Retriever(config)
         self.generator = Generator(config)
 
-    def query(self, question: str, log_to_mlflow: bool = True) -> Dict:
+    def query(self, question: str, log_to_mlflow: bool = True) -> dict:
         start = time.time()
 
         chunks = self.retriever.retrieve(question)
@@ -42,7 +41,7 @@ class RAGChain:
 
         return result
 
-    def _log_run(self, result: Dict) -> None:
+    def _log_run(self, result: dict) -> None:
         tracking_uri = os.getenv("MLFLOW_TRACKING_URI", self.config["mlflow"]["tracking_uri"])
         mlflow.set_tracking_uri(tracking_uri)
         mlflow.set_experiment(self.config["mlflow"]["experiment_name"])
