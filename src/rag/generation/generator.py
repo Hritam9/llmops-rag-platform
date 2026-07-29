@@ -6,7 +6,6 @@ Switch via config.yaml -> generation.provider
 """
 import os
 import time
-from typing import Dict, List, Tuple
 
 
 class Generator:
@@ -29,7 +28,7 @@ class Generator:
         else:
             raise ValueError(f"Unknown provider: {self.provider}")
 
-    def generate(self, messages: List[Dict[str, str]]) -> Tuple[str, Dict]:
+    def generate(self, messages: list[dict[str, str]]) -> tuple[str, dict]:
         """Call the LLM and return (answer_text, usage_metadata)."""
         start = time.time()
 
