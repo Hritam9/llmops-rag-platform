@@ -4,12 +4,11 @@ Usage:
     python -m src.rag.ingestion.ingest --source data/raw
 """
 import argparse
+import os
 import time
 
 import chromadb
 import mlflow
-
-import os
 
 from src.config import load_config
 from src.rag.ingestion.embedder import get_embedding_model
