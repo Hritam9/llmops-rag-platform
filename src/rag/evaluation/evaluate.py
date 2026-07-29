@@ -14,6 +14,7 @@ import json
 import math
 import os
 import sys
+import time
 
 import mlflow
 from datasets import Dataset
@@ -150,6 +151,17 @@ def _write_github_step_summary(
         f.write("\n".join(lines) + "\n")
 
 
+def _run_ragas_grading(dataset, metrics, judge_llm, judge_embeddings):
+    """Run one full ragas grading pass and return the resulting pandas DataFrame."""
+    scores = evaluate(
+        dataset,
+        metrics=metrics,
+        llm=judge_llm,
+        embeddings=judge_embeddings,
+    )
+    return scores.to_pandas()
+
+
 def run_evaluation(config: dict):
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI", config["mlflow"]["tracking_uri"])
     mlflow.set_tracking_uri(tracking_uri)
@@ -184,13 +196,38 @@ def run_evaluation(config: dict):
 
     judge_name = config["evaluation"].get("judge_model_name", config["generation"]["model_name"])
     print(f"[evaluation] Grading with judge model: {judge_name}")
-    scores = evaluate(
-        dataset,
-        metrics=metrics,
-        llm=judge_llm,
-        embeddings=judge_embeddings,
-    )
-    scores_df = scores.to_pandas()
+
+    # ragas occasionally hits transient internal parsing errors on a specific
+    # metric/row (e.g. a known bug where a malformed judge-LLM response leads
+    # to `AttributeError: 'StringIO' object has no attribute 'sentences'`
+    # inside the faithfulness metric's statement-extraction step). ragas
+    # already retries the underlying LLM call internally, but that specific
+    # bug is a parsing issue downstream of the call, not something its
+    # internal retry catches. Since this is a flake in the *grading* step,
+    # not a real quality regression in the RAG chain, we retry the whole
+    # grading pass a few times before treating it as a genuine failure.
+    max_attempts = config["evaluation"].get("max_grading_attempts", 3)
+    scores_df = None
+    for attempt in range(1, max_attempts + 1):
+        print(f"[evaluation] Grading attempt {attempt}/{max_attempts}...")
+        attempt_df = _run_ragas_grading(dataset, metrics, judge_llm, judge_embeddings)
+        nan_counts = {
+            m: int(attempt_df[m].isna().sum())
+            for m in metric_names if m in attempt_df.columns
+        }
+        total_nans = sum(nan_counts.values())
+        scores_df = attempt_df  # keep the most recent attempt regardless of outcome
+
+        if total_nans == 0:
+            print(f"[evaluation] Attempt {attempt}/{max_attempts} graded cleanly (no ungraded scores).")
+            break
+
+        remaining = max_attempts - attempt
+        print(f"[evaluation] Attempt {attempt}/{max_attempts} had {total_nans} ungraded score(s) "
+              f"{nan_counts} - likely a transient judge-LLM parsing issue rather than a real "
+              f"quality problem. {'Retrying...' if remaining else 'No attempts left.'}")
+        if remaining:
+            time.sleep(2 * attempt)  # brief backoff before retrying
 
     # Full transparency: print every question, answer, and per-metric score.
     _print_per_question_report(scores_df, metric_names)
@@ -221,6 +258,8 @@ def run_evaluation(config: dict):
         mlflow.log_params({
             "num_eval_questions": len(eval_set),
             "judge_model_name": judge_name,
+            "grading_attempts_used": attempt,
+            "max_grading_attempts": max_attempts,
         })
         # MLflow rejects NaN metric values, so log a -1 sentinel when grading failed
         # (never a silently-dropped metric, and never a value that could look like
