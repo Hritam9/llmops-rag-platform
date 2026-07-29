@@ -1,8 +1,7 @@
 """Builds the final prompt sent to the LLM from retrieved context + user question."""
-from typing import Dict, List
 
 
-def build_rag_prompt(question: str, context_chunks: List[Dict], system_prompt: str) -> List[Dict[str, str]]:
+def build_rag_prompt(question: str, context_chunks: list[dict], system_prompt: str) -> list[dict[str, str]]:
     """Assemble a chat-format message list for the LLM call.
 
     Keeping this as its own function (rather than inline in generator.py) means
