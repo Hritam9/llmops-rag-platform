@@ -40,6 +40,10 @@ evaluation:
   # llama-3.1-8b-instant are unreliable at this and silently return NaN.
   # Use a larger, more instruction-reliable free-tier Groq model for grading.
   judge_model_name: "llama-3.3-70b-versatile"
+  # ragas occasionally hits a transient internal parsing bug on a specific
+  # metric/row (unrelated to actual RAG quality). We retry the full grading
+  # pass this many times before treating it as a genuine evaluation failure.
+  max_grading_attempts: 3
 
 mlflow:
   experiment_name: "llmops-rag-platform"
