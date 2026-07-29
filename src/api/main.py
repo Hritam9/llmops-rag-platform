@@ -73,8 +73,12 @@ def query(request: QueryRequest):
             total_latency_seconds=result["total_latency_seconds"],
         )
     except Exception as e:
+        # Top-level API boundary: must convert any failure from the RAG
+        # chain (Groq/network/Chroma/etc.) into a clean 500 response
+        # instead of crashing the worker or leaking a raw traceback.
+        # Chaining with `from e` preserves the original traceback for logs.
         QUERY_ERRORS.inc()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.get("/metrics")
