@@ -55,7 +55,7 @@ def _col(row_or_df, keys, default=""):
     return default
 
 
-def _build_ragas_judge(config: dict):
+def _build_ragas_judge(config: dict, temperature: float = 0):
     """Ragas needs its own LLM + embeddings to grade answers — this is
     separate from the LLM your RAG chain uses to *generate* answers.
     By default ragas.evaluate() falls back to OpenAI, which fails with no
@@ -67,13 +67,17 @@ def _build_ragas_judge(config: dict):
     separate, more capable judge model (configs/config.yaml ->
     evaluation.judge_model_name) rather than reusing the fast generation
     model, specifically to avoid that failure mode.
+
+    `temperature` defaults to 0 for a fully deterministic first grading
+    pass. See the retry loop in run_evaluation() for why callers may pass
+    a nonzero temperature on retries.
     """
     judge_model_name = config["evaluation"].get(
         "judge_model_name", config["generation"]["model_name"]
     )
     judge_llm = ChatGroq(
         model=judge_model_name,
-        temperature=0,  # deterministic grading
+        temperature=temperature,
     )
     judge_embeddings = get_embedding_model(
         config["embedding"]["model_name"],
@@ -192,24 +196,31 @@ def run_evaluation(config: dict):
 
     metric_names = config["evaluation"]["metrics"]
     metrics = [METRIC_MAP[m] for m in metric_names]
-    judge_llm, judge_embeddings = _build_ragas_judge(config)
 
     judge_name = config["evaluation"].get("judge_model_name", config["generation"]["model_name"])
     print(f"[evaluation] Grading with judge model: {judge_name}")
 
-    # ragas occasionally hits transient internal parsing errors on a specific
-    # metric/row (e.g. a known bug where a malformed judge-LLM response leads
-    # to `AttributeError: 'StringIO' object has no attribute 'sentences'`
-    # inside the faithfulness metric's statement-extraction step). ragas
-    # already retries the underlying LLM call internally, but that specific
-    # bug is a parsing issue downstream of the call, not something its
-    # internal retry catches. Since this is a flake in the *grading* step,
-    # not a real quality regression in the RAG chain, we retry the whole
-    # grading pass a few times before treating it as a genuine failure.
+    # ragas has a known, unresolved upstream bug where the faithfulness
+    # metric's statement-extraction step can throw
+    # `AttributeError: 'StringIO' object has no attribute 'sentences'`
+    # on certain (often short/terse) answers:
+    # https://github.com/explodinggradients/ragas/issues/1683
+    # This is deterministic for a given judge-LLM response — at
+    # temperature=0, retrying with an identical prompt reproduces the
+    # exact same failure every time. So on retries (attempt > 1) we
+    # rebuild the judge LLM with a small nonzero temperature, which is
+    # enough to get a differently-worded (but still valid) judge response
+    # and often avoids whatever specific phrasing triggers the parser bug.
+    # Attempt 1 always stays at temperature=0 for a fully reproducible
+    # "true" grade when nothing goes wrong.
     max_attempts = config["evaluation"].get("max_grading_attempts", 3)
     scores_df = None
     for attempt in range(1, max_attempts + 1):
-        print(f"[evaluation] Grading attempt {attempt}/{max_attempts}...")
+        judge_temperature = 0 if attempt == 1 else 0.3
+        judge_llm, judge_embeddings = _build_ragas_judge(config, temperature=judge_temperature)
+
+        print(f"[evaluation] Grading attempt {attempt}/{max_attempts} "
+              f"(judge temperature={judge_temperature})...")
         attempt_df = _run_ragas_grading(dataset, metrics, judge_llm, judge_embeddings)
         nan_counts = {
             m: int(attempt_df[m].isna().sum())
@@ -224,8 +235,9 @@ def run_evaluation(config: dict):
 
         remaining = max_attempts - attempt
         print(f"[evaluation] Attempt {attempt}/{max_attempts} had {total_nans} ungraded score(s) "
-              f"{nan_counts} - likely a transient judge-LLM parsing issue rather than a real "
-              f"quality problem. {'Retrying...' if remaining else 'No attempts left.'}")
+              f"{nan_counts} - likely the known ragas parsing bug (see "
+              f"github.com/explodinggradients/ragas/issues/1683), not a real quality problem. "
+              f"{'Retrying with a jittered judge temperature...' if remaining else 'No attempts left.'}")
         if remaining:
             time.sleep(2 * attempt)  # brief backoff before retrying
 
